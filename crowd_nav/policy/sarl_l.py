@@ -6,14 +6,50 @@ from crowd_nav.policy.cadrl import mlp
 from crowd_nav.policy.multi_human_rl import MultiHumanRL
 
 
+def LocalMap1( state):
+    Wholemap = torch.zeros(state.shape[0], state.shape[1], state.shape[2] + 4)
+    CellSize = 1
+    sampleNumber = state.shape[0]
+    for i in range(sampleNumber):
+        SampleX_Y = state[i][:, 6:8]
+        SampleN = SampleX_Y.shape[0]
+        for j in range(SampleN):
+            OtherLocation = torch.stack([x for y, x in enumerate(SampleX_Y) if y != j])
+            CurrentLocation = torch.FloatTensor(SampleX_Y[j])
+            RelativeLocation = OtherLocation - CurrentLocation
+            RelativeValue = torch.norm(RelativeLocation, dim=1)
+            map = torch.zeros(2, 2)
+            for k in range(RelativeValue.shape[0]):
+                if RelativeValue[k] > CellSize:
+                    if RelativeLocation[k][0] > 0:
+                        if RelativeLocation[k][1] > 0:
+                            map[0][0] += 1
+                        else:
+                            map[0][1] += 1
+                    else:
+                        if RelativeLocation[k][1] > 0:
+                            map[1][0] += 1
+                        else:
+                            map[1][1] += 1
+
+            map = map.flatten()
+            Wholemap[i][j] = torch.cat([state[i][j], map])
+
+    return Wholemap
+
 class ValueNetwork(nn.Module):
     def __init__(self, input_dim, self_state_dim, mlp1_dims, mlp2_dims, mlp3_dims, attention_dims, with_global_state,
                  cell_size, cell_num):
         super().__init__()
         self.self_state_dim = self_state_dim
         self.global_state_dim = mlp1_dims[-1]
-        self.mlp1 = mlp(input_dim, mlp1_dims, last_relu=True)
+
+
+        self.mlp1 = mlp(input_dim+4, mlp1_dims, last_relu=True)
         self.mlp2 = mlp(mlp1_dims[-1], mlp2_dims)
+        # self.lstm1 = nn.LSTM(input_dim, 3,batch_first=True)
+
+
         self.with_global_state = with_global_state
         if with_global_state:
             self.attention = mlp(mlp1_dims[-1] * 2, attention_dims)
@@ -23,7 +59,53 @@ class ValueNetwork(nn.Module):
         self.cell_num = cell_num
         mlp3_input_dim = mlp2_dims[-1] + self.self_state_dim
         self.mlp3 = mlp(mlp3_input_dim, mlp3_dims)
+	    self.mlp3a = mlp(mlp3_input_dim,[150,100,80])
         self.attention_weights = None
+        self.advantage_stream = nn.Sequential(
+                nn.Linear(80,80),
+                nn.ReLU(),
+                nn.Linear(80,1)
+            )
+	
+
+    def LocalMap(self,state):
+        Wholemap = torch.zeros(state.shape[0],state.shape[1],state.shape[2]+4).cuda()
+        CellSize = 3
+        sampleNumber = state.shape[0]
+        for i in range(sampleNumber):
+            SampleX_Y = state[i][:,6:8]
+            SampleN = SampleX_Y.shape[0]
+            for j in range(SampleN):
+                OtherLocation = torch.stack( [x for y,x in enumerate(SampleX_Y) if y!= j])
+                CurrentLocation =  SampleX_Y[j]
+                RelativeLocation = OtherLocation - CurrentLocation
+                RelativeValue = torch.norm(RelativeLocation,dim=1)
+                map = torch.zeros(2, 2).cuda()
+                for k in range(RelativeValue.shape[0]):
+                    if RelativeValue[k]<CellSize:
+                        if RelativeLocation[k][0]>0:
+                            if RelativeLocation[k][1] > 0:
+                                map[0][0] += 1
+                            else:
+                                map[0][1] += 1
+                        else:
+                            if RelativeLocation[k][1] > 0:
+                                map[1][0]+=1
+                            else:
+                                map[1][1]+=1
+
+                map = map.flatten()
+                Wholemap[i][j] = torch.cat([ state[i][j],map])
+
+        return Wholemap
+
+
+
+
+
+
+
+
 
     def forward(self, state):
         """
@@ -32,6 +114,7 @@ class ValueNetwork(nn.Module):
         :param state: tensor of shape (batch_size, # of humans, length of a rotated state)
         :return:
         """
+        state = self.LocalMap(state)
         size = state.shape
         self_state = state[:, 0, :self.self_state_dim]
         mlp1_output = self.mlp1(state.view((-1, size[2])))
@@ -62,11 +145,16 @@ class ValueNetwork(nn.Module):
         # concatenate agent's state with global weighted humans' state
         joint_state = torch.cat([self_state, weighted_feature], dim=1)
         value = self.mlp3(joint_state)
+	adv = self.mlp3a(joint_state)
+        advantage = self.advantage_stream(adv)
 
-        return value
+        qvals = value+(advantage-advantage.mean())
+
+        return qvals
+        
 
 
-class SARL(MultiHumanRL):
+class SARL_L(MultiHumanRL):
     def __init__(self):
         super().__init__()
         self.name = 'SARL'
@@ -88,3 +176,8 @@ class SARL(MultiHumanRL):
 
     def get_attention_weights(self):
         return self.model.attention_weights
+
+if __name__ == '__main__':
+
+    a = torch.zeros((100,8,13))
+    LocalMap1(a)

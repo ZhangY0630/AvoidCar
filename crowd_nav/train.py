@@ -60,6 +60,7 @@ def main():
     logging.info('Using device: %s', device)
 
     # configure policy
+    print(args.policy)
     policy = policy_factory[args.policy]()
     if not policy.trainable:
         parser.error('Policy has to be trainable')

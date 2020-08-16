@@ -28,7 +28,7 @@ class ValueNetwork(nn.Module):
         value = self.value_network(state)
         return value
 
-
+torch.tensor([1,1])
 class CADRL(Policy):
     def __init__(self):
         super().__init__()
@@ -191,7 +191,7 @@ class CADRL(Policy):
 
         """
         # 'px', 'py', 'vx', 'vy', 'radius', 'gx', 'gy', 'v_pref', 'theta', 'px1', 'py1', 'vx1', 'vy1', 'radius1'
-        #  0     1      2     3      4        5     6      7         8       9     10      11     12       13
+        #  0     1      2     3      4        5     6      7         8
         batch = state.shape[0]
         dx = (state[:, 5] - state[:, 0]).reshape((batch, -1))
         dy = (state[:, 6] - state[:, 1]).reshape((batch, -1))
