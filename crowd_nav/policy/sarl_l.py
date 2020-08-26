@@ -59,7 +59,7 @@ class ValueNetwork(nn.Module):
         self.cell_num = cell_num
         mlp3_input_dim = mlp2_dims[-1] + self.self_state_dim
         self.mlp3 = mlp(mlp3_input_dim, mlp3_dims)
-	    self.mlp3a = mlp(mlp3_input_dim,[150,100,80])
+        self.mlp3a = mlp(mlp3_input_dim,[150,100,80])
         self.attention_weights = None
         self.advantage_stream = nn.Sequential(
                 nn.Linear(80,80),
@@ -145,7 +145,7 @@ class ValueNetwork(nn.Module):
         # concatenate agent's state with global weighted humans' state
         joint_state = torch.cat([self_state, weighted_feature], dim=1)
         value = self.mlp3(joint_state)
-	adv = self.mlp3a(joint_state)
+        adv = self.mlp3a(joint_state)
         advantage = self.advantage_stream(adv)
 
         qvals = value+(advantage-advantage.mean())

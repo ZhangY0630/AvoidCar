@@ -13,7 +13,7 @@ class ValueNetwork(nn.Module):
         self.self_state_dim = self_state_dim
         self.global_state_dim = mlp1_dims[-1]
 
-        self.mlp1 = mlp(input_dim + 4, mlp1_dims, last_relu=True)
+        self.mlp1 = mlp(input_dim + 5, mlp1_dims, last_relu=True)
         self.mlp2 = mlp(mlp1_dims[-1], mlp2_dims)
         # self.lstm1 = nn.LSTM(input_dim, 3,batch_first=True)
 
@@ -35,7 +35,7 @@ class ValueNetwork(nn.Module):
         )
 
     def LocalMap(self, state):
-        Wholemap = torch.zeros(state.shape[0], state.shape[1], state.shape[2] + 4).cuda()
+        Wholemap = torch.zeros(state.shape[0], state.shape[1], state.shape[2] + 5).cuda()
         CellSize = 3
         sampleNumber = state.shape[0]
         for i in range(sampleNumber):
@@ -61,7 +61,13 @@ class ValueNetwork(nn.Module):
                                 map[1][1] += 1
 
                 map = map.flatten()
-                Wholemap[i][j] = torch.cat([state[i][j], map])
+                vx = state[i][j][8]
+                vy = state[i][j][9]
+                awareness = torch.Tensor([0]).cuda()
+                if(vy <=0 ):
+                    awareness=torch.Tensor([1]).cuda()
+
+                Wholemap[i][j] = torch.cat(([state[i][j], map,awareness]))
 
         return Wholemap
 
@@ -111,7 +117,7 @@ class ValueNetwork(nn.Module):
         return qvals
 
 
-class SARL_L(MultiHumanRL):
+class SARL_E(MultiHumanRL):
     def __init__(self):
         super().__init__()
         self.name = 'SARL'
